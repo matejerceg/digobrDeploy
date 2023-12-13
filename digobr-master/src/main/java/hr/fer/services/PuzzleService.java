@@ -3,6 +3,7 @@ package hr.fer.services;
 import hr.fer.common.PuzzleDifficulty;
 import hr.fer.dto.PuzzleDto;
 import hr.fer.dto.PuzzleTypeInfoDto;
+import hr.fer.dto.Word;
 import hr.fer.dto.openai.ChatGPTResponse;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +20,13 @@ public class PuzzleService {
     //1=horizontal 2=vertical
     public static int direction = 0;
 
+    public static List<PuzzleDto> allPuzzles = new ArrayList<PuzzleDto>();
+
+    public static int mL;
+    public static int mT;
+
     public String createPrompt(PuzzleTypeInfoDto puzzleTypeInfo) {
+        allPuzzles.clear();
         //TODO: formiraj prompt koristeci podatke iz PuzzleTypeInfoDto
 
         //testni prompt
@@ -40,7 +47,7 @@ public class PuzzleService {
         List<String> questions = getQuestions(response);
         List<String> answers = getAnswers(response);
 
-        for(int i = 0; i < 100; i++) {
+        for(int i = 0; i < 1; i++) {
             initializeEmptyPuzzle();
             wordList.clear();
             generateWords(wordList, response);
@@ -51,7 +58,13 @@ public class PuzzleService {
         String[][] bestPuzzle = evaluatePuzzles(listOfPuzzles);
         printPuzzle(bestPuzzle);
 
-        return new PuzzleDto(bestPuzzle, questions, answers);
+        System.out.println(mL);
+        System.out.println(mT);
+
+        formatPuzzle();
+        return allPuzzles.get(0);
+
+        //return new PuzzleDto(bestPuzzle, questions, answers);
     }
 
     private static void initializeEmptyPuzzle() {
@@ -109,8 +122,16 @@ public class PuzzleService {
 
         int numberOfItterations = 0;
 
+        PuzzleDto p = new PuzzleDto();
+        List<Word> wordsInPuzzle = new ArrayList<>();
+        p.puzzle = wordsInPuzzle;
+
         NEXT: while(count < maxWords && wordList.size()>0) {
             word = wordList.get(0);
+
+            Word w = new Word();
+            w.word = word;
+
             char[] listaSlova = word.toCharArray();
             for(int c = 0; c<listaSlova.length; c++) {
                 for(int i = 0;i <GRID_SIZE;i++) {
@@ -118,10 +139,23 @@ public class PuzzleService {
                         if(puzzle[i][j].equals(String.valueOf(listaSlova[c]))) {
                             boolean canPLace = canPlace(word, i, j,c);
                             if(canPLace) {
-                                if(direction == 1) placeHorizontal(i, j-c, word);
-                                if(direction == 2) placeVertical(j, i-c, word);
+                                if(direction == 1) {
+                                    placeHorizontal(i, j-c, word);
+                                    w.startPosition = new int[]{i, j - c};
+                                    w.endPosition = new int[]{i, (j -c) + word.length()};
+                                    w.vertical = false;
+                                    w.desc = "TODO";
+                                }
+                                if(direction == 2) {
+                                    placeVertical(j, i-c, word);
+                                    w.startPosition = new int[]{i-c, j};
+                                    w.endPosition = new int[]{i + word.length(), j -c};
+                                    w.vertical = true;
+                                    w.desc = "TODO";
+                                }
                                 count++;
                                 wordList.remove(word);
+                                wordsInPuzzle.add(w);
                                 //resetiraj brojac iteracija za sljedecu rijec
                                 numberOfItterations=0;
                                 continue NEXT;
@@ -142,6 +176,7 @@ public class PuzzleService {
         }
 
         String[][] generatedPuzzle = cutOut();
+        allPuzzles.add(p);
         return generatedPuzzle;
     }
 
@@ -156,12 +191,14 @@ public class PuzzleService {
             for(int j=0; j<GRID_SIZE; j++) {
                 if(!puzzle[i][j].equals(" ") && j < minLeft) {
                     minLeft = j;
+                    mL = minLeft;
                 }
                 if(!puzzle[i][j].equals(" ") && j > maxRight) {
                     maxRight = j;
                 }
                 if(!puzzle[i][j].equals(" ") && i < minTop) {
                     minTop = i;
+                    mT=minTop;
                 }
                 if(!puzzle[i][j].equals(" ") && i > maxBottom) {
                     maxBottom = i;
@@ -351,15 +388,36 @@ public class PuzzleService {
         int rows = puzzle.length;
         int columns = puzzle[0].length;
 
-        for (int i = 0; i < 5*columns; i++) {System.out.print("-");}System.out.println();
+        System.out.printf("%-5s","*");
+        for(int j = 0; j<columns; j++) {
+            System.out.printf("%-5s",j);
+        }
+        System.out.println();
+
+        for (int i = 0; i < 5*(columns+1); i++) {System.out.print("-");}System.out.println();
 
         for(int i = 0; i<rows; i++) {
+            System.out.printf("%-3s|%1s", i, "");
             for(int j = 0; j<columns; j++) {
                 System.out.printf("%-5s",puzzle[i][j]);
             }
             System.out.println();
         }
 
-        for (int i = 0; i < 5*columns; i++) {System.out.print("-");}System.out.println();
+        for (int i = 0; i < 5*(columns+1); i++) {System.out.print("-");}System.out.println();
+    }
+
+    public static void formatPuzzle() {
+        for(PuzzleDto p : allPuzzles) {
+            for(Word w : p.puzzle) {
+                int[] newPosition = new int[]{w.startPosition[0] - mT, w.startPosition[1] - mL};
+                w.startPosition = newPosition;
+                if(w.vertical) {
+                    w.endPosition = new int[]{w.startPosition[0] + w.word.length()-1, w.startPosition[1]};
+                } else {
+                    w.endPosition = new int[]{w.startPosition[0], w.startPosition[1] + w.word.length()-1};
+                }
+            }
+        }
     }
 }
